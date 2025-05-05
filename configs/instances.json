@@ -1,0 +1,23 @@
+{
+    "instances": [
+      {
+        "name": "vm-001",
+        "ip": "192.168.1.10",
+        "os": "Ubuntu 22.04",
+        "status": "UP"
+      },
+      {
+        "name": "vm-002",
+        "ip": "192.168.1.11",
+        "os": "Debian 12",
+        "status": "DOWN"
+      },
+      {
+        "name": "vm-003",
+        "ip": "192.168.1.12",
+        "os": "CentOS 8",
+        "status": "UP"
+      }
+    ]
+  }
+  
