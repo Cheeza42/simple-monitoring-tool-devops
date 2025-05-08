@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from machine_model import VMInstance
 
 # Loads instance data from the JSON configuration file
 def load_instances():
@@ -19,12 +20,34 @@ def print_intro():
     print("-----------------------------------")
     print("1. Check if a machine exists")
     print("2. Exit")
+    print("3. Validate all the VMs")
+
+# Validate all VM dictionaries against the VMInstance model
+def validate_all_instances(instances):
+    print("\n🔍 Validating all VM instances from JSON...\n")
+    time.sleep(1)
+
+    for idx, data in enumerate(instances, 1):
+        try:
+            # Simulate processing delay
+            print(f"⏳ Validating VM #{idx}...")
+            time.sleep(1.2)
+
+            # Attempt to create a VMInstance object from the dictionary
+            vm = VMInstance(**data)
+            print(f"✅ VM #{idx} ('{vm.name}') is valid.\n")
+        except Exception as e:
+            print(f"❌ VM #{idx} failed validation:")
+            print(f"   Error: {e}\n")
+        time.sleep(0.8)  # Slight pause between VMs
+
+    print("✔️ Validation process completed.")
 
 # Main function that runs the monitoring tool
 def main():
     while True:
         print_intro()
-        choice = input("Choose an option (1 or 2): ").strip()
+        choice = input("Choose an option (1, 2 or 3): ").strip()
 
         # Option 1: Check if a machine exists
         if choice == '1':
@@ -53,7 +76,7 @@ def main():
                 # Ask user if they want to check another machine
                 again = input("Would you like to check another machine? (y/n): ").strip().lower()
                 if again != 'y':
-                    print("🔄 Returning to main menu...\n")
+                    print("🔄 Returning to main menu.\n")
                     time.sleep(1.5)
                     checking = False
 
@@ -62,9 +85,14 @@ def main():
             print("👋 Exiting. Goodbye!")
             time.sleep(1)
             break
-
+        
+        elif choice == '3':
+            instances = load_instances()
+            validate_all_instances(instances)
+            input("\nPress Enter to return to menu...")
+        
         else:
-            print("❗ Invalid choice. Please enter 1 or 2.\n")
+            print("❗ Invalid choice. Please enter 1, 2 or 3.\n")
             time.sleep(1)
 
             # Entry point

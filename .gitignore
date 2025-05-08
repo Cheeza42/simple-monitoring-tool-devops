@@ -25,3 +25,6 @@ logs/
 *.egg-info/
 *.egg
 .ipynb_checkpoints
+
+# JSON 
+configs/instances.json 
