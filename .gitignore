@@ -27,4 +27,4 @@ logs/
 .ipynb_checkpoints
 
 # JSON 
-configs/instances.json 
+configs/instances.json
