@@ -21,6 +21,7 @@ def print_intro():
     print("1. Check if a machine exists")
     print("2. Exit")
     print("3. Validate all the VMs")
+    print("4. Add a new machine")
 
 # Validate all VM dictionaries against the VMInstance model
 def validate_all_instances(instances):
@@ -43,11 +44,70 @@ def validate_all_instances(instances):
 
     print("✔️ Validation process completed.")
 
+def add_new_machine():
+    print("\n🆕 Add a New Machine")
+    print("--------------------")
+
+    name = input("Enter machine name: ").strip()
+    ip = input("Enter IP address: ").strip()
+    os_name = input("Enter operating system: ").strip()
+    status = input("Enter status (UP/DOWN): ").strip().upper()
+
+    data = {
+        "name": name,
+        "ip": ip,
+        "os": os_name,
+        "status": status
+    }
+
+    # Step 1: Validate input using Pydantic
+    try:
+        vm = VMInstance(**data)
+    except Exception:
+        print("Invalid machine configuration.\n")
+        return "cancel"
+
+    # Step 2: Check for duplicate name
+    instances = load_instances()
+    if any(inst.get("name") == name for inst in instances):
+        print(f"Error: Machine with name '{name}' already exists. Please choose a unique name.\n")
+        retry = input("Would you like to try again? (y/n): ").strip().lower()
+        if retry == 'y':
+            return "retry"
+        else:
+            print("🔄 Returning to main menu...\n")
+            return "cancel"
+
+    # Step 3: Confirm before saving
+    print("\nPlease confirm the machine details:")
+    time.sleep(0.8)
+    print(json.dumps(data, indent=4))
+    time.sleep(1)
+    confirm = input("Save this machine? (y/n): ").strip().lower()
+    if confirm != 'y':
+        print("Machine not saved.\n")
+        return "cancel"
+
+    # Step 4: Save to file
+    instances.append(data)
+    full_data = {"instances": instances}
+    path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
+
+    try:
+        with open(path, 'w') as file:
+            json.dump(full_data, file, indent=4)
+        time.sleep(1.5)
+        print("Machine saved successfully!\n")
+        return "added"
+    except Exception as e:
+        print(f"Error: Failed to save machine: {e}\n")
+        return "cancel"
+    
 # Main function that runs the monitoring tool
 def main():
     while True:
         print_intro()
-        choice = input("Choose an option (1, 2 or 3): ").strip()
+        choice = input("Choose an option (1, 2, 3 or 4): ").strip()
 
         # Option 1: Check if a machine exists
         if choice == '1':
@@ -85,14 +145,30 @@ def main():
             print("👋 Exiting. Goodbye!")
             time.sleep(1)
             break
-        
+        # Option 3: Return to main manu after finishing validation
         elif choice == '3':
             instances = load_instances()
             validate_all_instances(instances)
             input("\nPress Enter to return to menu...")
-        
+       # Option 4: Asking the user if he wants to add more VMs - if not, he will return to main manu
+        elif choice == '4':
+             adding = True
+             while adding:
+         
+                   result = add_new_machine()
+                   if result == "retry":
+                      continue  # Try adding a machine again
+                   if result == "cancel":
+                        break  # User chose not to continue → return to main menu
+                   if result == "added":
+                       again = input("Would you like to add another machine? (y/n): ").strip().lower()
+                   if again != 'y':
+                      print("🔄 Returning to main menu...\n")
+                      time.sleep(1)
+                      adding = False
+
         else:
-            print("❗ Invalid choice. Please enter 1, 2 or 3.\n")
+            print("❗ Invalid choice. Please enter 1, 2, 3 or 4.\n")
             time.sleep(1)
 
             # Entry point
