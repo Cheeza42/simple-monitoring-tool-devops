@@ -63,6 +63,10 @@ def main():
             time.sleep(1)
             break
 
-        # Handle invalid menu input
         else:
-            print
+            print("❗ Invalid choice. Please enter 1 or 2.\n")
+            time.sleep(1)
+
+            # Entry point
+if __name__ == "__main__":
+     main()
