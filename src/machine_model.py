@@ -14,7 +14,18 @@ class VMInstance(BaseModel):
     ip: IPvAnyAddress
 
     # Operating system description (must be a non-empty string)
-    os: str
+    os: Literal[
+        "linux",
+        "windows",
+        "ubuntu",
+        "centos",
+        "debian",
+        "redhat",
+        "macos",
+        "arch",
+        "fedora"
+    ]
+
 
     # Machine status (must be either "UP" or "DOWN")
     status: Literal["UP", "DOWN"]
@@ -28,7 +39,16 @@ class VMInstance(BaseModel):
 
     # Validator to ensure the 'os' field is not empty or just whitespace
     @field_validator("os")
-    def os_cannot_be_empty(cls, v):
-        if not v.strip():
-            raise ValueError("OS cannot be empty")
+    def os_must_be_valid(cls, v):
+        allowed_os = {"linux", "windows", "ubuntu", "centos", "debian", "redhat", "macos", "arch", "fedora"}
+        os_name = v.strip().split()[0].lower()
+        if os_name not in allowed_os:
+            raise ValueError(f"Invalid operating system. Please choose from: {', '.join(sorted(allowed_os))}")
+        return v
+    
+    # Validator to ensure the 'status' field is not empty or just whitespace
+    @field_validator("status")
+    def status_must_be_valid(cls, v):
+        if v not in {"UP", "DOWN"}:
+            raise ValueError("Status must be either 'UP' or 'DOWN'")
         return v
