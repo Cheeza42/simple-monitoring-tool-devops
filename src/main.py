@@ -22,6 +22,7 @@ def print_intro():
     print("2. Exit")
     print("3. Validate all the VMs")
     print("4. Add a new machine")
+    print("5. Display all machines")
 
 # Validate all VM dictionaries against the VMInstance model
 def validate_all_instances(instances):
@@ -59,13 +60,20 @@ def add_new_machine():
         "os": os_name,
         "status": status
     }
-
+   
     # Step 1: Validate input using Pydantic
     try:
         vm = VMInstance(**data)
-    except Exception:
-        print("Invalid machine configuration.\n")
-        return "cancel"
+    except Exception as e:
+        print(f"❌ Invalid machine configuration: {e}\n")
+        retry = input("Would you like to try again? (y/n): ").strip().lower()
+        if retry == 'y':
+            return "retry"
+        else:
+            print("🔄 Returning to main menu...\n")
+            return "cancel"
+
+      
 
     # Step 2: Check for duplicate name
     instances = load_instances()
@@ -102,12 +110,40 @@ def add_new_machine():
     except Exception as e:
         print(f"Error: Failed to save machine: {e}\n")
         return "cancel"
-    
+
+# Displays all machines from the configuration file
+def display_all_instances():
+    path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
+    try:
+        print("📦 Displaying machines...")
+        time.sleep(3)
+
+        with open(path, 'r') as file:
+            data = json.load(file)
+            instances = data.get("instances", [])
+
+        if not instances:
+            print("📭 No machines found.\n")
+            return
+
+        for i, inst in enumerate(instances, 1):
+            print(f"\nMachine #{i}")
+            print(f"Name   : {inst.get('name')}")
+            print(f"IP     : {inst.get('ip')}")
+            print(f"OS     : {inst.get('os')}")
+            print(f"Status : {inst.get('status')}")
+            print("------------------------------")
+            time.sleep(1.8)
+    except FileNotFoundError:
+        print("❌ Configuration file not found.")
+    except Exception as e:
+        print(f"❌ Failed to load machines: {e}")
+
 # Main function that runs the monitoring tool
 def main():
     while True:
         print_intro()
-        choice = input("Choose an option (1, 2, 3 or 4): ").strip()
+        choice = input("Choose an option (1, 2, 3, 4 or 5): ").strip()
 
         # Option 1: Check if a machine exists
         if choice == '1':
@@ -149,7 +185,7 @@ def main():
         elif choice == '3':
             instances = load_instances()
             validate_all_instances(instances)
-            input("\nPress Enter to return to menu...")
+            input("\nValidation complete, press Enter to return to menu...")
        # Option 4: Asking the user if he wants to add more VMs - if not, he will return to main manu
         elif choice == '4':
              adding = True
@@ -166,9 +202,13 @@ def main():
                       print("🔄 Returning to main menu...\n")
                       time.sleep(1)
                       adding = False
+       
+        elif choice == '5':
+            display_all_instances()
+            input("\nDisplay complete, press Enter to return to menu...")
 
         else:
-            print("❗ Invalid choice. Please enter 1, 2, 3 or 4.\n")
+            print("❗ Invalid choice. Please enter 1, 2, 3, 4 or 5.\n")
             time.sleep(1)
 
             # Entry point
