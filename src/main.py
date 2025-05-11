@@ -1,6 +1,8 @@
 import json
 import os
 import time
+from collections import Counter
+from logger import logger
 from machine_model import VMInstance
 
 # Loads instance data from the JSON configuration file
@@ -23,11 +25,13 @@ def print_intro():
     print("3. Validate all the VMs")
     print("4. Add a new machine")
     print("5. Display all machines")
+    print("Display VMs statistics")
 
 # Validate all VM dictionaries against the VMInstance model
 def validate_all_instances(instances):
-    print("\n🔍 Validating all VM instances from JSON...\n")
-    time.sleep(1)
+    logger.info("🔍 Started validating all VM instances from JSON.")
+    print("\n🔍 Validating machine configurations...")
+    time.sleep(1.5)
 
     for idx, data in enumerate(instances, 1):
         try:
@@ -38,9 +42,11 @@ def validate_all_instances(instances):
             # Attempt to create a VMInstance object from the dictionary
             vm = VMInstance(**data)
             print(f"✅ VM #{idx} ('{vm.name}') is valid.\n")
+            logger.info(f"Machine #{vm.name} is valid")
         except Exception as e:
             print(f"❌ VM #{idx} failed validation:")
             print(f"   Error: {e}\n")
+            logger.error(f"Machine #{vm.name} is invalid: {e}")
         time.sleep(0.8)  # Slight pause between VMs
 
     print("✔️ Validation process completed.")
@@ -66,6 +72,7 @@ def add_new_machine():
         vm = VMInstance(**data)
     except Exception as e:
         print(f"❌ Invalid machine configuration: {e}\n")
+        logger.error(f"Validation failed for new machine: {e}")
         retry = input("Would you like to try again? (y/n): ").strip().lower()
         if retry == 'y':
             return "retry"
@@ -79,6 +86,7 @@ def add_new_machine():
     instances = load_instances()
     if any(inst.get("name") == name for inst in instances):
         print(f"Error: Machine with name '{name}' already exists. Please choose a unique name.\n")
+        logger.warning(f"Attempted to add duplicate machine name: '{name}'")
         retry = input("Would you like to try again? (y/n): ").strip().lower()
         if retry == 'y':
             return "retry"
@@ -94,6 +102,7 @@ def add_new_machine():
     confirm = input("Save this machine? (y/n): ").strip().lower()
     if confirm != 'y':
         print("Machine not saved.\n")
+        logger.info(f"User canceled saving machine '{name}'")
         return "cancel"
 
     # Step 4: Save to file
@@ -106,13 +115,16 @@ def add_new_machine():
             json.dump(full_data, file, indent=4)
         time.sleep(1.5)
         print("Machine saved successfully!\n")
+        logger.warning(f"Machine '{name}' does not exist")
         return "added"
+    
     except Exception as e:
         print(f"Error: Failed to save machine: {e}\n")
         return "cancel"
 
 # Displays all machines from the configuration file
 def display_all_instances():
+    logger.info("User requested to display all machine instances.") 
     path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
     try:
         print("📦 Displaying machines...")
@@ -139,11 +151,44 @@ def display_all_instances():
     except Exception as e:
         print(f"❌ Failed to load machines: {e}")
 
+# Display summary statistics about the VM instances
+def display_statistics():
+    logger.info("User requested VM statistics.")
+    print(" 📊 Gathering VM statistics...")
+    time.sleep(1.5)
+    instances = load_instances()
+
+    if not instances:
+        print("📭 No machines found.\n")
+        return
+
+    total = len(instances)
+    up = sum(1 for inst in instances if inst.get("status") == "UP")
+    down = total - up
+
+    os_counter = Counter()
+    for inst in instances:
+        os_value = inst.get("os", "unknown").strip().split()[0].lower()
+        os_counter[os_value] += 1
+
+    print("\n📊 VM Summary:")
+    print(f"- Total machines: {total}")
+    print(f"- Machines UP  : {up}")
+    print(f"- Machines DOWN: {down}\n")
+    time.sleep(1)
+    print("-----------------------------")
+    time.sleep(0.8)
+    print("🖥️ By OS:")
+    for os_name, count in os_counter.items():
+        print(f"• {os_name.capitalize()}: {count}")
+    time.sleep(1.5)
+    print("\n")
+    
 # Main function that runs the monitoring tool
 def main():
     while True:
         print_intro()
-        choice = input("Choose an option (1, 2, 3, 4 or 5): ").strip()
+        choice = input("Choose an option (1, 2, 3, 4, 5 or 6): ").strip()
 
         # Option 1: Check if a machine exists
         if choice == '1':
@@ -164,9 +209,11 @@ def main():
 
                 if check_machine_exists(instances, machine_name):
                     print(f"✅ Machine '{machine_name}' exists.\n")
+                    logger.info(f"Machine '{machine_name}' exists")
+
                 else:
                     print(f"❌ Machine '{machine_name}' does not exist.\n")
-
+                    logger.warning(f"Machine '{machine_name}' does not exist")
                 time.sleep(1)
 
                 # Ask user if they want to check another machine
@@ -206,9 +253,13 @@ def main():
         elif choice == '5':
             display_all_instances()
             input("\nDisplay complete, press Enter to return to menu...")
-
+        
+        elif choice == '6':
+            display_statistics()
+            input("\nDisplay complete, press Enter to return to menu...")
+        
         else:
-            print("❗ Invalid choice. Please enter 1, 2, 3, 4 or 5.\n")
+            print("❗ Invalid choice. Please enter 1, 2, 3, 4, 5 or 6.\n")
             time.sleep(1)
 
             # Entry point
