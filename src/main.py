@@ -1,9 +1,20 @@
 import json
 import os
+import shutil
 import time
 from collections import Counter
 from logger import logger
 from machine_model import VMInstance
+
+def backup_instances_file():
+    """Creates a backup copy of the instances.json file."""
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
+        backup_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances_backup.json')
+        shutil.copyfile(config_path, backup_path)
+        logger.info("Backup created successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to create backup: {e}")
 
 # Loads instance data from the JSON configuration file
 def load_instances():
@@ -25,7 +36,9 @@ def print_intro():
     print("3. Validate all the VMs")
     print("4. Add a new machine")
     print("5. Display all machines")
-    print("Display VMs statistics")
+    print("6. Display VMs statistics")
+    print("7. Edit an exsisting machine")
+    print("8. Remove a machine")
 
 # Validate all VM dictionaries against the VMInstance model
 def validate_all_instances(instances):
@@ -109,6 +122,9 @@ def add_new_machine():
     instances.append(data)
     full_data = {"instances": instances}
     path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
+    
+    # Backup before writing
+    backup_instances_file()
 
     try:
         with open(path, 'w') as file:
@@ -183,12 +199,115 @@ def display_statistics():
         print(f"• {os_name.capitalize()}: {count}")
     time.sleep(1.5)
     print("\n")
-    
+
+def edit_existing_machine():
+    print("\n✏️ Edit Existing Machine")
+    print("------------------------")
+    instances = load_instances()
+    name = input("Enter the machine name to edit: ").strip()
+    time.sleep(1.2)
+
+    # Search for machine by name
+    for idx, inst in enumerate(instances):
+        if inst.get("name") == name:
+            # Display current configuration
+            print("\nCurrent configuration:")
+            time.sleep(0.8)
+            print(json.dumps(inst, indent=4))
+            print("\nPress Enter to keep existing value.\n")
+
+            # Ask user for new values (optional)
+            new_ip = input(f"IP address [{inst['ip']}]: ").strip()
+            new_os = input(f"Operating system [{inst['os']}]: ").strip()
+            new_status = input(f"Status (UP/DOWN) [{inst['status']}]: ").strip().upper()
+
+            # Create updated data (keep original if input is empty)
+            updated_data = {
+                "name": name,  # name is not editable
+                "ip": new_ip if new_ip else inst["ip"],
+                "os": new_os if new_os else inst["os"],
+                "status": new_status if new_status else inst["status"]
+            }
+
+            # Validate using Pydantic model
+            try:
+                updated_vm = VMInstance(**updated_data)
+            except Exception as e:
+                print(f"\n❌ Invalid configuration: {e}")
+                logger.error(f"Validation failed while editing '{name}': {e}")
+                return
+
+            # Confirm before saving
+            confirm = input("\nSave changes? (y/n): ").strip().lower()
+            if confirm != 'y':
+                print("Changes discarded.\n")
+                logger.info(f"User cancelled editing for machine '{name}'")
+                return
+            
+            # Backup before writing
+            backup_instances_file()
+
+            # Save the updated data back to file
+            instances[idx] = updated_data
+            path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
+            with open(path, 'w') as file:
+                json.dump({"instances": instances}, file, indent=4)
+            
+            print("💾 Saving changes...")
+            time.sleep(1.3)
+            print("✅ Machine updated successfully.\n")
+            time.sleep(0.8)
+            logger.info(f"Machine '{name}' was updated.")
+            return
+
+    # If machine was not found
+    print(f"❌ Machine '{name}' not found.\n")
+    logger.warning(f"Attempted to edit non-existing machine '{name}'")
+
+def remove_machine():
+    print("\n🗑️ Remove a Machine")
+    print("--------------------")
+    instances = load_instances()
+    name = input("Enter the machine name to remove: ").strip()
+
+    print("🔍 Searching for machine...")
+    time.sleep(1)
+
+    for idx, inst in enumerate(instances):
+        if inst.get("name") == name:
+            print("\nMachine found:")
+            print(json.dumps(inst, indent=4))
+            time.sleep(0.8)
+
+            confirm = input("\nAre you sure you want to delete this machine? (y/n): ").strip().lower()
+            if confirm != 'y':
+                print("❎ Deletion canceled.\n")
+                logger.info(f"User canceled deletion of machine '{name}'")
+                return
+
+            # Remove and save
+            del instances[idx]
+            
+            # Backup before writing
+            backup_instances_file()
+
+            path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
+            with open(path, 'w') as file:
+                json.dump({"instances": instances}, file, indent=4)
+
+            time.sleep(1.3)
+            print("✅ Machine deleted successfully.\n")
+            logger.warning(f"Machine '{name}' was deleted.")
+            return
+
+    print(f"❌ Machine '{name}' not found.\n")
+    logger.warning(f"Attempted to delete non-existing machine '{name}'")
+
 # Main function that runs the monitoring tool
 def main():
     while True:
         print_intro()
-        choice = input("Choose an option (1, 2, 3, 4, 5 or 6): ").strip()
+        choice = input("Choose an option (1, 2, 3, 4, 5, 6, 7 or 8): ").strip()
 
         # Option 1: Check if a machine exists
         if choice == '1':
@@ -258,8 +377,16 @@ def main():
             display_statistics()
             input("\nDisplay complete, press Enter to return to menu...")
         
+        elif choice == '7':
+             edit_existing_machine()
+             input("\nEdit complete, press Enter to return to menu...")
+        
+        elif choice == '8':
+             remove_machine()
+             input("\nDeletion complete, press Enter to return to menu...")
+
         else:
-            print("❗ Invalid choice. Please enter 1, 2, 3, 4, 5 or 6.\n")
+            print("❗ Invalid choice. Please enter 1, 2, 3, 4, 5, 6, 7 or 8.\n")
             time.sleep(1)
 
             # Entry point
