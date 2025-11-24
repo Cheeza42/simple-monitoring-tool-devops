@@ -307,7 +307,7 @@ def remove_machine():
 def main():
     while True:
         print_intro()
-        choice = input("Choose an option (1, 2, 3, 4, 5, 6, 7 or 8): ").strip()
+        choice = input("Choose an option (from 1-8): ").strip()
 
         # Option 1: Check if a machine exists
         if choice == '1':
@@ -389,7 +389,7 @@ def main():
              input("\nDeletion complete, press Enter to return to menu...")
 
         else:
-            print("❗ Invalid choice. Please enter 1, 2, 3, 4, 5, 6, 7 or 8.\n")
+            print("❗ Invalid choice. Please enter an option between 1-8.\n")
             time.sleep(1)
 
             # Entry point
