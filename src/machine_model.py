@@ -3,7 +3,7 @@
 from pydantic import BaseModel, IPvAnyAddress, field_validator
 
 # Import from typing to restrict field values to specific literal options (like enums)
-from typing import Literal
+from typing import Literal, Optional
 
 # VMInstance defines the structure and validation rules for a virtual machine instance
 class VMInstance(BaseModel):
@@ -18,7 +18,8 @@ class VMInstance(BaseModel):
 
     # Machine status (must be either "UP" or "DOWN")
     status: Literal["UP", "DOWN"]
-
+    
+    check: Literal["ping", "http"] = "ping"
     # Validator to ensure the 'name' field is not empty or just whitespace
     @field_validator("name")
     @classmethod
