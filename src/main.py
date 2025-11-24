@@ -131,7 +131,7 @@ def add_new_machine():
             json.dump(full_data, file, indent=4)
         time.sleep(1.5)
         print("Machine saved successfully!\n")
-        logger.warning(f"Machine '{name}' does not exist")
+        logger.info(f"Machine '{name}' was added successfully")
         return "added"
     
     except Exception as e:
