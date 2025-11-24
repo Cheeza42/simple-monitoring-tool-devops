@@ -59,7 +59,7 @@ def validate_all_instances(instances):
         except Exception as e:
             print(f"❌ VM #{idx} failed validation:")
             print(f"   Error: {e}\n")
-            logger.error(f"Machine #{vm.name} is invalid: {e}")
+            logger.error(f"Machine #{idx} is invalid: {e}")
         time.sleep(0.8)  # Slight pause between VMs
 
     print("✔️ Validation process completed.")
@@ -357,17 +357,20 @@ def main():
              adding = True
              while adding:
          
-                   result = add_new_machine()
-                   if result == "retry":
+                 result = add_new_machine()
+                 if result == "retry":
                       continue  # Try adding a machine again
-                   if result == "cancel":
-                        break  # User chose not to continue → return to main menu
-                   if result == "added":
-                       again = input("Would you like to add another machine? (y/n): ").strip().lower()
-                   if again != 'y':
-                      print("🔄 Returning to main menu...\n")
-                      time.sleep(1)
-                      adding = False
+                 if result == "cancel":
+                     print("🔄 Returning to main menu...\n")
+                     time.sleep(1)
+                     adding = False
+                     continue  # User chose not to continue → return to main menu
+                 if result == "added":
+                     again = input("Would you like to add another machine? (y/n): ").strip().lower()
+                     if again != 'y':
+                         print("🔄 Returning to main menu...\n")
+                         time.sleep(1)
+                         adding = False
        
         elif choice == '5':
             display_all_instances()

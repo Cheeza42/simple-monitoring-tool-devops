@@ -1,0 +1,53 @@
+{
+    "instances": [
+        {
+            "name": "vm-001",
+            "ip": "192.168.1.10",
+            "os": "Ubuntu 22.04",
+            "status": "UP"
+        },
+        {
+            "name": "vm-002",
+            "ip": "192.168.1.11",
+            "os": "Debian 12",
+            "status": "DOWN"
+        },
+        {
+            "name": "vm-003",
+            "ip": "192.168.1.12",
+            "os": "CentOS 8",
+            "status": "UP"
+        },
+        {
+            "name": "vm-004",
+            "ip": "192.168.1.13",
+            "os": "CentOS 8",
+            "status": "UP"
+        },
+        {
+            "name": "vm-005",
+            "ip": "192.168.1.14",
+            "os": "Debian 12",
+            "status": "DOWN"
+        },
+        {
+            "name": "vm-006",
+            "ip": "192.168.1.16",
+            "os": "Windows 10",
+            "status": "UP"
+        },
+        {
+            "name": "vm-007",
+            "ip": "192.168.1.15",
+            "os": "IOS 8.0.4",
+            "status": "UP"
+        },
+        {
+            "name": "vm-009",
+            "ip": "192.168.1.17",
+            "os": "Ubuntu 22.04",
+            "status": "UP"
+        }
+    ]
+}
+
