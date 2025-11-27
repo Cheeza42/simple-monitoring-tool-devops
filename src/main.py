@@ -40,6 +40,18 @@ def print_intro():
     print("7. Edit an exsisting machine")
     print("8. Remove a machine")
 
+def monitor_vm(vm: VMInstance):
+    print(f"🧪 Running health check for '{vm.name}'...")
+    time.sleep(0.8)
+
+    if vm.check == "ping":
+        print(f"   [SIM] PING {vm.ip} ... OK")
+    elif vm.check == "http":
+        print(f"   [SIM] HTTP GET {vm.url} ... OK")
+
+    print()
+
+
 # Validate all VM dictionaries against the VMInstance model
 def validate_all_instances(instances):
     logger.info("🔍 Started validating all VM instances from JSON.")
@@ -56,6 +68,7 @@ def validate_all_instances(instances):
             vm = VMInstance(**data)
             print(f"✅ VM #{idx} ('{vm.name}') is valid.\n")
             logger.info(f"Machine #{vm.name} is valid")
+            monitor_vm(vm)
         except Exception as e:
             print(f"❌ VM #{idx} failed validation:")
             print(f"   Error: {e}\n")
@@ -72,14 +85,24 @@ def add_new_machine():
     ip = input("Enter IP address: ").strip()
     os_name = input("Enter operating system: ").strip()
     status = input("Enter status (UP/DOWN): ").strip().upper()
-
+    check = input("Enter check type (ping/http) [ping]: ").strip().lower()
+    if check == "":
+        check = "ping"
+    url = None
+    if check == "http":
+        url = input("Enter health-check URL: ").strip()
+    
     data = {
         "name": name,
         "ip": ip,
         "os": os_name,
-        "status": status
+        "status": status,
+        "check": check
     }
-   
+    
+    if url:
+        data["url"] = url 
+
     # Step 1: Validate input using Pydantic
     try:
         vm = VMInstance(**data)
