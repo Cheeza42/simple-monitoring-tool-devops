@@ -5,6 +5,14 @@ import time
 from collections import Counter
 from logger import logger
 from machine_model import VMInstance
+from colorama import init, Fore, Style
+
+init()
+
+COLOR_RESET = Style.RESET_ALL
+COLOR_GREEN = Fore.GREEN
+COLOR_YELLOW = Fore.YELLOW
+COLOR_RED = Fore.RED
 
 def backup_instances_file():
     """Creates a backup copy of the instances.json file."""
@@ -161,6 +169,26 @@ def add_new_machine():
         print(f"Error: Failed to save machine: {e}\n")
         return "cancel"
 
+# Displays the UP/DOWN status's color according to their status.
+def color_status(status: str) -> str:
+    s = status.upper()
+    if s == "UP":
+        return COLOR_GREEN + status + COLOR_RESET
+    if s == "DOWN":
+        return COLOR_RED + status + COLOR_RESET 
+    return status
+
+# Displays the health status's color according to their status.
+def color_health(health: str) -> str:
+    h = health.upper()
+    if h == "OK":
+        return COLOR_GREEN + health + COLOR_RESET
+    if h == "WARN":
+        return COLOR_YELLOW + health + COLOR_RESET
+    if h == "CRIT":
+        return COLOR_RED + health + COLOR_RESET
+    return health
+
 # Displays all machines from the configuration file
 def display_all_instances():
     logger.info("User requested to display all machine instances.") 
@@ -177,18 +205,51 @@ def display_all_instances():
             print("📭 No machines found.\n")
             return
 
-        for i, inst in enumerate(instances, 1):
-            print(f"\nMachine #{i}")
-            print(f"Name   : {inst.get('name')}")
-            print(f"IP     : {inst.get('ip')}")
-            print(f"OS     : {inst.get('os')}")
-            print(f"Status : {inst.get('status')}")
-            print("------------------------------")
-            time.sleep(1.8)
+        header = (
+            f"{'NAME':<12}"
+            f"{'IP':<18}"
+            f"{'OS(ver)':<15}"
+            f"{'STATUS':<10}"
+            f"{'HEALTH':<10}"
+            f"{'RT(ms)':<10}"
+            f"{'CPU%':<8}"
+            f"{'MEM%':<8}"
+        )
+        print()
+        print(header)
+        print("-" * len(header))
+
+        for inst in instances:
+            name = str(inst.get("name"))
+            ip = str(inst.get("ip"))
+            os_name = str(inst.get("os"))
+            status_raw = str(inst.get("status"))
+            health_raw = str(inst.get("health"))
+            rt = str(inst.get("response_time_ms"))
+            cpu = str(inst.get("cpu_percent"))
+            mem = str(inst.get("memory_percent"))
+            
+            status_colored = color_status(status_raw)
+            health_colored = color_health(health_raw)
+
+            print(
+                f"{name:<12}"
+                f"{ip:<18}"
+                f"{os_name:<15}"
+                f"{status_colored:<18}"
+                f"{health_colored:<17}"
+                f"{rt:<10}"
+                f"{cpu:<8}"
+                f"{mem:<8}"
+            )
+
+        print()
+
     except FileNotFoundError:
         print("❌ Configuration file not found.")
     except Exception as e:
         print(f"❌ Failed to load machines: {e}")
+
 
 # Display summary statistics about the VM instances
 def display_statistics():
@@ -209,6 +270,19 @@ def display_statistics():
     for inst in instances:
         os_value = inst.get("os", "unknown").strip().split()[0].lower()
         os_counter[os_value] += 1
+    
+    health_counter = Counter()
+    for inst in instances:
+        health_value = str(inst.get("health", "UNKNOWN")).upper()
+        health_counter[health_value] += 1
+
+    rts = [inst.get("response_time_ms") for inst in instances if isinstance(inst.get("response_time_ms"), (int, float))]
+    cpus = [inst.get("cpu_percent") for inst in instances if isinstance(inst.get("cpu_percent"), (int, float))]
+    mems = [inst.get("memory_percent") for inst in instances if isinstance(inst.get("memory_percent"), (int, float))]
+
+    avg_rt = sum(rts) / len(rts) if rts else 0
+    avg_cpu = sum(cpus) / len(cpus) if cpus else 0
+    avg_mem = sum(mems) / len(mems) if mems else 0
 
     print("\n📊 VM Summary:")
     print(f"- Total machines: {total}")
@@ -216,13 +290,26 @@ def display_statistics():
     print(f"- Machines DOWN: {down}\n")
     time.sleep(1)
     print("-----------------------------")
-    time.sleep(0.8)
-    print("🖥️ By OS:")
+    time.sleep(0.5)
+    print("🖥️  By OS:")
     for os_name, count in os_counter.items():
         print(f"• {os_name.capitalize()}: {count}")
+    time.sleep(1)
+    print("-----------------------------")
+    time.sleep(0.5)
+    print("\n❤️  Health status:")
+    for health_value, count in health_counter.items():
+        print(f"• {health_value}: {count}")
+    time.sleep(1)
+    print("-----------------------------")
+    time.sleep(0.5)
+    print("\n📈 Performance (averages):")
+    print(f"- Avg response time: {avg_rt:.1f} ms")
+    print(f"- Avg CPU usage    : {avg_cpu:.1f} %")
+    print(f"- Avg memory usage : {avg_mem:.1f} %")
     time.sleep(1.5)
     print("\n")
-
+    
 def edit_existing_machine():
     print("\n✏️ Edit Existing Machine")
     print("------------------------")
