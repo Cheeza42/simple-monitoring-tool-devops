@@ -3,10 +3,10 @@
  including base model definition, IP address validation, and custom field validators.
 '''
 
-from pydantic import BaseModel, IPvAnyAddress, field_validator
+from pydantic import BaseModel, IPvAnyAddress, field_validator,Field
 
 # Import from typing to restrict field values to specific literal options (like enums)
-from typing import Literal, Optional
+from typing import Literal, Optional, Annotated
 
 # VMInstance defines the structure and validation rules for the VM's instance. 
 class VMInstance(BaseModel):
@@ -24,6 +24,18 @@ class VMInstance(BaseModel):
     # URL check   
     check: Literal["ping", "http"] = "ping"
     url: Optional[str] = None
+   
+    # The CPU percent of the VM.
+    cpu_percent: Annotated[int, Field (ge=0, le=100)]
+    
+    # The memorey percent of the VM.
+    memory_percent: Annotated[int, Field(ge=0, le=100)]
+    
+    # The response time of the VM.
+    response_time_ms: Annotated[int, Field(ge=0)] 
+    
+    # The health status of the VM.
+    health: Literal["OK", "WARN", "CRIT"]
 
     # Validator to ensure the 'name' field is not empty or just whitespace
     @field_validator("name")
