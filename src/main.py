@@ -1,11 +1,11 @@
 import json
 import os
-import shutil
 import time
-from collections import Counter
 from logger import logger
 from machine_model import VMInstance
 from colorama import init, Fore, Style
+from storage import load_instances, backup_instances_file
+from monitoring import validate_all_instances, display_statistics
 
 init()
 
@@ -13,23 +13,6 @@ COLOR_RESET = Style.RESET_ALL
 COLOR_GREEN = Fore.GREEN
 COLOR_YELLOW = Fore.YELLOW
 COLOR_RED = Fore.RED
-
-def backup_instances_file():
-    """Creates a backup copy of the instances.json file."""
-    try:
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
-        backup_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances_backup.json')
-        shutil.copyfile(config_path, backup_path)
-        logger.info("Backup created successfully.")
-    except Exception as e:
-        logger.warning(f"Failed to create backup: {e}")
-
-# Loads instance data from the JSON configuration file
-def load_instances():
-    path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
-    with open(path, 'r') as file:
-        data = json.load(file)
-    return data.get('instances', [])
 
 # Checks whether a given machine name exists in the loaded instances
 def check_machine_exists(instances, name):
@@ -48,43 +31,7 @@ def print_intro():
     print("7. Edit an exsisting machine")
     print("8. Remove a machine")
 
-def monitor_vm(vm: VMInstance):
-    print(f"🧪 Running health check for '{vm.name}'...")
-    time.sleep(0.8)
-
-    if vm.check == "ping":
-        print(f"   [SIM] PING {vm.ip} ... OK")
-    elif vm.check == "http":
-        print(f"   [SIM] HTTP GET {vm.url} ... OK")
-
-    print()
-
-
-# Validate all VM dictionaries against the VMInstance model
-def validate_all_instances(instances):
-    logger.info("🔍 Started validating all VM instances from JSON.")
-    print("\n🔍 Validating machine configurations...")
-    time.sleep(1.5)
-
-    for idx, data in enumerate(instances, 1):
-        try:
-            # Simulate processing delay
-            print(f"⏳ Validating VM #{idx}...")
-            time.sleep(1.2)
-
-            # Attempt to create a VMInstance object from the dictionary
-            vm = VMInstance(**data)
-            print(f"✅ VM #{idx} ('{vm.name}') is valid.\n")
-            logger.info(f"Machine #{vm.name} is valid")
-            monitor_vm(vm)
-        except Exception as e:
-            print(f"❌ VM #{idx} failed validation:")
-            print(f"   Error: {e}\n")
-            logger.error(f"Machine #{idx} is invalid: {e}")
-        time.sleep(0.8)  # Slight pause between VMs
-
-    print("✔️ Validation process completed.")
-
+# Handles interactive flow for adding a new VM
 def add_new_machine():
     print("\n🆕 Add a New Machine")
     print("--------------------")
@@ -124,8 +71,6 @@ def add_new_machine():
             print("🔄 Returning to main menu...\n")
             return "cancel"
 
-      
-
     # Step 2: Check for duplicate name
     instances = load_instances()
     if any(inst.get("name") == name for inst in instances):
@@ -149,12 +94,11 @@ def add_new_machine():
         logger.info(f"User canceled saving machine '{name}'")
         return "cancel"
 
-    # Step 4: Save to file
+    # Step 4: Save to file (with backup before writing)
     instances.append(data)
     full_data = {"instances": instances}
     path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
     
-    # Backup before writing
     backup_instances_file()
 
     try:
@@ -169,7 +113,7 @@ def add_new_machine():
         print(f"Error: Failed to save machine: {e}\n")
         return "cancel"
 
-# Displays the UP/DOWN status's color according to their status.
+# Displays the UP/DOWN status's color according to their status
 def color_status(status: str) -> str:
     s = status.upper()
     if s == "UP":
@@ -178,7 +122,7 @@ def color_status(status: str) -> str:
         return COLOR_RED + status + COLOR_RESET 
     return status
 
-# Displays the health status's color according to their status.
+# Displays the health status's color according to their status
 def color_health(health: str) -> str:
     h = health.upper()
     if h == "OK":
@@ -192,14 +136,11 @@ def color_health(health: str) -> str:
 # Displays all machines from the configuration file
 def display_all_instances():
     logger.info("User requested to display all machine instances.") 
-    path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
     try:
         print("📦 Displaying machines...")
         time.sleep(3)
 
-        with open(path, 'r') as file:
-            data = json.load(file)
-            instances = data.get("instances", [])
+        instances = load_instances()
 
         if not instances:
             print("📭 No machines found.\n")
@@ -250,66 +191,7 @@ def display_all_instances():
     except Exception as e:
         print(f"❌ Failed to load machines: {e}")
 
-
-# Display summary statistics about the VM instances
-def display_statistics():
-    logger.info("User requested VM statistics.")
-    print(" 📊 Gathering VM statistics...")
-    time.sleep(1.5)
-    instances = load_instances()
-
-    if not instances:
-        print("📭 No machines found.\n")
-        return
-
-    total = len(instances)
-    up = sum(1 for inst in instances if inst.get("status") == "UP")
-    down = total - up
-
-    os_counter = Counter()
-    for inst in instances:
-        os_value = inst.get("os", "unknown").strip().split()[0].lower()
-        os_counter[os_value] += 1
-    
-    health_counter = Counter()
-    for inst in instances:
-        health_value = str(inst.get("health", "UNKNOWN")).upper()
-        health_counter[health_value] += 1
-
-    rts = [inst.get("response_time_ms") for inst in instances if isinstance(inst.get("response_time_ms"), (int, float))]
-    cpus = [inst.get("cpu_percent") for inst in instances if isinstance(inst.get("cpu_percent"), (int, float))]
-    mems = [inst.get("memory_percent") for inst in instances if isinstance(inst.get("memory_percent"), (int, float))]
-
-    avg_rt = sum(rts) / len(rts) if rts else 0
-    avg_cpu = sum(cpus) / len(cpus) if cpus else 0
-    avg_mem = sum(mems) / len(mems) if mems else 0
-
-    print("\n📊 VM Summary:")
-    print(f"- Total machines: {total}")
-    print(f"- Machines UP  : {up}")
-    print(f"- Machines DOWN: {down}\n")
-    time.sleep(1)
-    print("-----------------------------")
-    time.sleep(0.5)
-    print("🖥️  By OS:")
-    for os_name, count in os_counter.items():
-        print(f"• {os_name.capitalize()}: {count}")
-    time.sleep(1)
-    print("-----------------------------")
-    time.sleep(0.5)
-    print("\n❤️  Health status:")
-    for health_value, count in health_counter.items():
-        print(f"• {health_value}: {count}")
-    time.sleep(1)
-    print("-----------------------------")
-    time.sleep(0.5)
-    print("\n📈 Performance (averages):")
-    print(f"- Avg response time: {avg_rt:.1f} ms")
-    print(f"- Avg CPU usage    : {avg_cpu:.1f} %")
-    print(f"- Avg memory usage : {avg_mem:.1f} %")
-    time.sleep(1.5)
-    print("\n")
-    
+# Handles interactive editing of an existing machine
 def edit_existing_machine():
     print("\n✏️ Edit Existing Machine")
     print("------------------------")
@@ -374,6 +256,7 @@ def edit_existing_machine():
     print(f"❌ Machine '{name}' not found.\n")
     logger.warning(f"Attempted to edit non-existing machine '{name}'")
 
+# Handles interactive deletion of a machine
 def remove_machine():
     print("\n🗑️ Remove a Machine")
     print("--------------------")
@@ -457,51 +340,56 @@ def main():
             print("👋 Exiting. Goodbye!")
             time.sleep(1)
             break
-        # Option 3: Return to main manu after finishing validation
+
+        # Option 3: Validate all VMs and return to main menu
         elif choice == '3':
             instances = load_instances()
             validate_all_instances(instances)
             input("\nValidation complete, press Enter to return to menu...")
-       # Option 4: Asking the user if he wants to add more VMs - if not, he will return to main manu
+
+        # Option 4: Add new machines (loop until user stops)
         elif choice == '4':
-             adding = True
-             while adding:
-         
-                 result = add_new_machine()
-                 if result == "retry":
-                      continue  # Try adding a machine again
-                 if result == "cancel":
-                     print("🔄 Returning to main menu...\n")
-                     time.sleep(1)
-                     adding = False
-                     continue  # User chose not to continue → return to main menu
-                 if result == "added":
-                     again = input("Would you like to add another machine? (y/n): ").strip().lower()
-                     if again != 'y':
-                         print("🔄 Returning to main menu...\n")
-                         time.sleep(1)
-                         adding = False
+            adding = True
+            while adding:
+                result = add_new_machine()
+                if result == "retry":
+                    continue  # Try adding a machine again
+                if result == "cancel":
+                    print("🔄 Returning to main menu...\n")
+                    time.sleep(1)
+                    adding = False
+                    continue
+                if result == "added":
+                    again = input("Would you like to add another machine? (y/n): ").strip().lower()
+                    if again != 'y':
+                        print("🔄 Returning to main menu...\n")
+                        time.sleep(1)
+                        adding = False
        
+        # Option 5: Display all machines
         elif choice == '5':
             display_all_instances()
             input("\nDisplay complete, press Enter to return to menu...")
         
+        # Option 6: Display statistics summary
         elif choice == '6':
             display_statistics()
             input("\nDisplay complete, press Enter to return to menu...")
         
+        # Option 7: Edit an existing machine
         elif choice == '7':
-             edit_existing_machine()
-             input("\nEdit complete, press Enter to return to menu...")
+            edit_existing_machine()
+            input("\nEdit complete, press Enter to return to menu...")
         
+        # Option 8: Remove a machine
         elif choice == '8':
-             remove_machine()
-             input("\nDeletion complete, press Enter to return to menu...")
+            remove_machine()
+            input("\nDeletion complete, press Enter to return to menu...")
 
         else:
             print("❗ Invalid choice. Please enter an option between 1-8.\n")
             time.sleep(1)
 
-            # Entry point
+# Entry point
 if __name__ == "__main__":
-     main()
+    main()
