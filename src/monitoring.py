@@ -54,19 +54,19 @@ def monitor_vm(vm: VMInstance):
     Runs health check for a single VM.
 
     Steps:
-    1. Always simulate CPU and memory usage (since we do not have real metrics yet).
-    2. Runs a real ping and decide health based on success + latency.
-    3. Sends a real HTTP request and decide health based on status code + latency.
-    4. For unknown methods: fall back to a simple simulated latency-based decision.
-    5. If health is still OK, apply an additional rule based on CPU / memory thresholds.
-    6. Print a human-readable summary and return a dict with all metrics.
+    1. Read CPU and memory metrics from the VM instance (assumed to come from an external source).
+    2. For 'ping': run a real ICMP ping and decide health based on success + latency.
+    3. For 'http': send a real HTTP request and decide health based on status code + latency.
+    4. For unsupported methods: mark as WARN without any simulated checks.
+    5. Print a human-readable summary and return a dict with all metrics.
     """
     print(f"🧪 Running health check for '{vm.name}'...")
     time.sleep(0.5)
 
-    # Simulated resource usage (we don't have real CPU/MEM metrics yet)
-    cpu_percent = random.randint(5, 95)
-    memory_percent = random.randint(5, 95)
+    # CPU and memory metrics are not simulated here.
+    # They are used only if provided on the VMInstance (from an external monitoring source).
+    cpu_percent = getattr(vm, "cpu_percent", None)
+    memory_percent = getattr(vm, "memory_percent", None)
 
     response_time_ms = None
     health = "OK"
@@ -111,18 +111,15 @@ def monitor_vm(vm: VMInstance):
                 reason = f"HTTP {status_code} or slow response"
 
     else:
-        # Unknown method: fall back to a simple latency-based simulation
-        response_time_ms = random.randint(20, 300)
+        # In the real mode, only 'ping' and 'http' are fully supported.
+        # Any other method is marked as WARN without running a simulated check.
+        health = "WARN"
+        reason = "Unsupported check method"
+        response_time_ms = None
 
-        if response_time_ms > 250:
-            health = "WARN"
-            reason = "Simulated latency for unknown method"
-
-    # Second-level rule: even if network looked OK, very high CPU/MEM is a warning
-    if health == "OK":
-        if cpu_percent > 85 or memory_percent > 90:
-            health = "WARN"
-            reason = "High resource usage"
+    # Prepare display values for CPU/MEM (external-only metrics)
+    cpu_display = f"{cpu_percent}%" if isinstance(cpu_percent, (int, float)) else "N/A"
+    mem_display = f"{memory_percent}%" if isinstance(memory_percent, (int, float)) else "N/A"
 
     # Human-readable output for the current VM
     if method == "ping":
@@ -131,10 +128,10 @@ def monitor_vm(vm: VMInstance):
         target = getattr(vm, "url", "(no URL)")
         print(f"   [REAL] HTTP GET {target} ... {health}")
     else:
-        print(f"   [SIM] UNKNOWN METHOD '{method}' ... {health}")
+        print(f"   [NO-CHECK] METHOD '{method}' ... {health}")
 
     print(f"   Reason: {reason}")
-    print(f"   RT={response_time_ms} ms | CPU={cpu_percent}% | MEM={memory_percent}%\n")
+    print(f"   RT={response_time_ms} ms | CPU={cpu_display} | MEM={mem_display}\n")
 
     # Structured result for aggregation in validate_all_instances()
     return {
