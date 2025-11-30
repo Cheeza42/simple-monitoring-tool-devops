@@ -1,54 +1,142 @@
 import time
 import random
+import subprocess
+import platform
 from collections import Counter
+import requests
 from logger import logger
 from machine_model import VMInstance
 from storage import load_instances
 
-# Simulated failure rate for health checks (10% of the checks will be forced to fail)
-FAILURE_RATE = 0.1
+def run_ping(ip, timeout=1):
+    """
+    Run a single ping to the given IP.
+    Returns (success: bool, elapsed_ms: int).
+    """
+    system = platform.system().lower()
+
+    # Use OS-specific flags for ping
+    if system == "windows":
+        cmd = ["ping", "-n", "1", "-w", str(timeout * 1000), ip]
+    else:
+        cmd = ["ping", "-c", "1", "-W", str(timeout), ip]
+
+    start = time.time()
+    completed = subprocess.run(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    elapsed_ms = int((time.time() - start) * 1000)
+    success = completed.returncode == 0
+
+    return success, elapsed_ms
+
+
+def run_http(url, timeout=2):
+    """
+    Send an HTTP GET request to the given URL.
+    Returns (success: bool, status_code: Optional[int], elapsed_ms: int).
+    """
+    start = time.time()
+
+    try:
+        response = requests.get(url, timeout=timeout)
+        elapsed_ms = int((time.time() - start) * 1000)
+        return True, response.status_code, elapsed_ms
+    except requests.RequestException:
+        elapsed_ms = int((time.time() - start) * 1000)
+        return False, None, elapsed_ms
 
 
 def monitor_vm(vm: VMInstance):
     """
-    Simulate a health check for a single VM.
-    Returns a dict with health, response time and resource usage.
-    Does NOT write anything back to JSON, this is per-run only.
+    Runs health check for a single VM.
+
+    Steps:
+    1. Always simulate CPU and memory usage (since we do not have real metrics yet).
+    2. Runs a real ping and decide health based on success + latency.
+    3. Sends a real HTTP request and decide health based on status code + latency.
+    4. For unknown methods: fall back to a simple simulated latency-based decision.
+    5. If health is still OK, apply an additional rule based on CPU / memory thresholds.
+    6. Print a human-readable summary and return a dict with all metrics.
     """
     print(f"🧪 Running health check for '{vm.name}'...")
     time.sleep(0.5)
 
-    # Simulate metrics for this VM
-    response_time_ms = random.randint(20, 300)
+    # Simulated resource usage (we don't have real CPU/MEM metrics yet)
     cpu_percent = random.randint(5, 95)
     memory_percent = random.randint(5, 95)
 
-    # Decide health based on simulated failure and thresholds
-    if random.random() < FAILURE_RATE:
-        health = "CRIT"
-        reason = "Simulated failure"
-    elif response_time_ms > 220 or cpu_percent > 85 or memory_percent > 90:
-        health = "WARN"
-        reason = "High latency or resource usage"
-    else:
-        health = "OK"
-        reason = "Healthy"
-
+    response_time_ms = None
+    health = "OK"
+    reason = "Healthy"
     method = vm.check
 
-    # Show what kind of check we are simulating
+    # Network check based on method type
     if method == "ping":
-        print(f"   [SIM] PING {vm.ip} ... {health}")
+        # Real ICMP ping to the configured IP
+        success, rt = run_ping(vm.ip)
+        response_time_ms = rt
+
+        if not success:
+            health = "CRIT"
+            reason = "Ping failed"
+        elif rt > 250:
+            health = "WARN"
+            reason = "High latency"
+
+    elif method == "http":
+        # Real HTTP GET to the configured URL
+        url = getattr(vm, "url", None)
+
+        if not url:
+            # Configuration error: HTTP check without URL
+            health = "CRIT"
+            reason = "Missing URL for HTTP check"
+            response_time_ms = 0
+        else:
+            success, status_code, rt = run_http(url)
+            response_time_ms = rt
+
+            if not success:
+                health = "CRIT"
+                reason = "HTTP request failed"
+            elif status_code >= 500:
+                health = "CRIT"
+                reason = f"HTTP {status_code}"
+            elif status_code >= 400 or rt > 400:
+                # Client error or slow response → treat as WARN
+                health = "WARN"
+                reason = f"HTTP {status_code} or slow response"
+
+    else:
+        # Unknown method: fall back to a simple latency-based simulation
+        response_time_ms = random.randint(20, 300)
+
+        if response_time_ms > 250:
+            health = "WARN"
+            reason = "Simulated latency for unknown method"
+
+    # Second-level rule: even if network looked OK, very high CPU/MEM is a warning
+    if health == "OK":
+        if cpu_percent > 85 or memory_percent > 90:
+            health = "WARN"
+            reason = "High resource usage"
+
+    # Human-readable output for the current VM
+    if method == "ping":
+        print(f"   [REAL] PING {vm.ip} ... {health}")
     elif method == "http":
         target = getattr(vm, "url", "(no URL)")
-        print(f"   [SIM] HTTP GET {target} ... {health}")
+        print(f"   [REAL] HTTP GET {target} ... {health}")
     else:
         print(f"   [SIM] UNKNOWN METHOD '{method}' ... {health}")
 
     print(f"   Reason: {reason}")
     print(f"   RT={response_time_ms} ms | CPU={cpu_percent}% | MEM={memory_percent}%\n")
 
-    # Return all simulated data so the caller can aggregate it
+    # Structured result for aggregation in validate_all_instances()
     return {
         "name": vm.name,
         "status": vm.status,
