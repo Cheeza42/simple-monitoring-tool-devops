@@ -1,25 +1,32 @@
 import time
-import random
 import subprocess
 import platform
 from collections import Counter
 import requests
 from logger import logger
 from machine_model import VMInstance
-from storage import load_instances
+
+def get_instances_from_server():
+    try:
+        response = requests.get("http://127.0.0.1:5000/instances", timeout=3)
+        data = response.json()
+        instances = data.get("instances", [])
+        if not isinstance(instances, list):
+            return []
+        return instances
+    except Exception as e:
+        print(f"❌ Failed to contact server for instances: {e}")
+        logger.error(f"Failed to fetch instances from server: {e}")
+        return []
 
 def run_ping(ip, timeout=1):
-    """
-    Run a single ping to the given IP.
-    Returns (success: bool, elapsed_ms: int).
-    """
     system = platform.system().lower()
+    ip_str = str(ip)
 
-    # Use OS-specific flags for ping
     if system == "windows":
-        cmd = ["ping", "-n", "1", "-w", str(timeout * 1000), ip]
+        cmd = ["ping", "-n", "1", "-w", str(timeout * 1000), ip_str]
     else:
-        cmd = ["ping", "-c", "1", "-W", str(timeout), ip]
+        cmd = ["ping", "-c", "1", "-W", str(timeout), ip_str]
 
     start = time.time()
     completed = subprocess.run(
@@ -212,7 +219,8 @@ def display_statistics():
     logger.info("User requested VM statistics.")
     print(" 📊 Gathering VM statistics...")
     time.sleep(1.5)
-    instances = load_instances()
+    instances = get_instances_from_server()
+
 
     if not instances:
         print("📭 No machines found.\n")
