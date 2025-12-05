@@ -19,6 +19,7 @@
             "memory_percent": 72,
             "response_time_ms": 100,
             "health": "OK"
+
         },
         {
             "name": "vm-003",
@@ -92,4 +93,3 @@
         }
     ]
 }
-
