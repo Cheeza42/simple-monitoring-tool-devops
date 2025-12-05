@@ -1,11 +1,14 @@
 import json
 import os
 import time
+import requests
 from logger import logger
 from machine_model import VMInstance
 from colorama import init, Fore, Style
 from storage import load_instances, backup_instances_file
 from monitoring import validate_all_instances, display_statistics
+
+API_BASE_URL = "http://127.0.0.1:5000"
 
 init()
 
@@ -33,6 +36,7 @@ def print_intro():
 
 # Handles interactive flow for adding a new VM
 def add_new_machine():
+    # Step 0: Collect user input
     print("\n🆕 Add a New Machine")
     print("--------------------")
 
@@ -46,7 +50,7 @@ def add_new_machine():
     url = None
     if check == "http":
         url = input("Enter health-check URL: ").strip()
-    
+
     data = {
         "name": name,
         "ip": ip,
@@ -54,63 +58,70 @@ def add_new_machine():
         "status": status,
         "check": check
     }
-    
-    if url:
-        data["url"] = url 
 
-    # Step 1: Validate input using Pydantic
+    if url:
+        data["url"] = url
+
+    # Step 1: Local validation using Pydantic model
     try:
         vm = VMInstance(**data)
     except Exception as e:
         print(f"❌ Invalid machine configuration: {e}\n")
         logger.error(f"Validation failed for new machine: {e}")
         retry = input("Would you like to try again? (y/n): ").strip().lower()
-        if retry == 'y':
+        if retry == "y":
             return "retry"
         else:
             print("🔄 Returning to main menu...\n")
             return "cancel"
 
-    # Step 2: Check for duplicate name
-    instances = load_instances()
+    # Step 2: Fetch existing machines from API (instead of local file)
+    try:
+        resp = requests.get(f"{API_BASE_URL}/instances", timeout=3)
+        existing_data = resp.json()
+        instances = existing_data.get("instances", [])
+    except Exception as e:
+        print(f"❌ Failed to fetch machines from server: {e}\n")
+        logger.error(f"Failed to fetch machines from server: {e}")
+        return "cancel"
+
+    # Step 3: Check for duplicate name
     if any(inst.get("name") == name for inst in instances):
         print(f"Error: Machine with name '{name}' already exists. Please choose a unique name.\n")
         logger.warning(f"Attempted to add duplicate machine name: '{name}'")
         retry = input("Would you like to try again? (y/n): ").strip().lower()
-        if retry == 'y':
+        if retry == "y":
             return "retry"
         else:
             print("🔄 Returning to main menu...\n")
             return "cancel"
 
-    # Step 3: Confirm before saving
+    # Step 4: Ask user to confirm before sending to server
     print("\nPlease confirm the machine details:")
     time.sleep(0.8)
     print(json.dumps(data, indent=4))
     time.sleep(1)
     confirm = input("Save this machine? (y/n): ").strip().lower()
-    if confirm != 'y':
+    if confirm != "y":
         print("Machine not saved.\n")
         logger.info(f"User canceled saving machine '{name}'")
         return "cancel"
 
-    # Step 4: Save to file (with backup before writing)
-    instances.append(data)
-    full_data = {"instances": instances}
-    path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
-    
-    backup_instances_file()
-
+    # Step 5: Send new machine to API (server will persist to JSON)
     try:
-        with open(path, 'w') as file:
-            json.dump(full_data, file, indent=4)
-        time.sleep(1.5)
-        print("Machine saved successfully!\n")
-        logger.info(f"Machine '{name}' was added successfully")
-        return "added"
-    
+        resp = requests.post(f"{API_BASE_URL}/instances", json=data, timeout=3)
+        if resp.status_code == 201:
+            time.sleep(1.5)
+            print("Machine saved successfully!\n")
+            logger.info(f"Machine '{name}' was added successfully via API")
+            return "added"
+        else:
+            print(f"Error: Failed to save machine: {resp.text}\n")
+            logger.error(f"Failed to save machine '{name}' via API: {resp.text}")
+            return "cancel"
     except Exception as e:
         print(f"Error: Failed to save machine: {e}\n")
+        logger.error(f"Error during API save for machine '{name}': {e}")
         return "cancel"
 
 # Displays the UP/DOWN status's color according to their status
@@ -140,7 +151,14 @@ def display_all_instances():
         print("📦 Displaying machines...")
         time.sleep(3)
 
-        instances = load_instances()
+        # Fetch from server instead of local file
+        try:
+            response = requests.get("http://127.0.0.1:5000/instances")
+            data = response.json()
+            instances = data.get("instances", [])
+        except Exception as e:
+            print(f"❌ Failed to contact server: {e}")
+            return
 
         if not instances:
             print("📭 No machines found.\n")
