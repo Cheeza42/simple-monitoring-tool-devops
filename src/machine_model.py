@@ -3,7 +3,7 @@
  including base model definition, IP address validation, and custom field validators.
 '''
 
-from pydantic import BaseModel, IPvAnyAddress, field_validator,Field
+from pydantic import BaseModel, IPvAnyAddress, field_validator, Field
 
 # Import from typing to restrict field values to specific literal options (like enums)
 from typing import Literal, Optional, Annotated
@@ -26,16 +26,16 @@ class VMInstance(BaseModel):
     url: Optional[str] = None
    
     # The CPU percent of the VM.
-    cpu_percent: Annotated[int, Field (ge=0, le=100)]
+    cpu_percent: Annotated[int, Field(ge=0, le=100)] = 0
     
     # The memorey percent of the VM.
-    memory_percent: Annotated[int, Field(ge=0, le=100)]
+    memory_percent: Annotated[int, Field(ge=0, le=100)] = 0
     
     # The response time of the VM.
-    response_time_ms: Annotated[int, Field(ge=0)] 
+    response_time_ms: Annotated[int, Field(ge=0)] = 0
     
     # The health status of the VM.
-    health: Literal["OK", "WARN", "CRIT"]
+    health: Literal["OK", "WARN", "CRIT"] = "OK"
 
     # Validator to ensure the 'name' field is not empty or just whitespace
     @field_validator("name")
@@ -69,7 +69,7 @@ class VMInstance(BaseModel):
             raise ValueError("Status must be either 'UP' or 'DOWN'")
         return v
    
-    #Validator to ensure the 'check' field is valid
+    # Validator to ensure the 'url' logic is correct for ping/http
     @field_validator("url")
     @classmethod
     def url_required_if_http(cls, v, info):
