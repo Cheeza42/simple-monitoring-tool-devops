@@ -81,6 +81,109 @@ def add_instance():
     logger.info(f"Machine '{vm.name}' added via API")
     return jsonify({"status": "ok"}), 201
 
+@app.put("/instances/<string:name>")
+def update_instance(name):
+    # Get payload from client (partial updates allowed)
+    payload = request.get_json(silent=True) or {}
+
+    # If file doesn't exist, nothing to update
+    if not INSTANCES_FILE.exists():
+        return jsonify({"error": "No instances file found"}), 404
+
+    # Load current instances
+    with INSTANCES_FILE.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Normalize structure to always work with "instances" list
+    if isinstance(data, dict) and "instances" in data:
+        instances = data["instances"]
+    elif isinstance(data, list):
+        instances = data
+    else:
+        instances = []
+
+    # Find machine by its unique name
+    index = None
+    for i, inst in enumerate(instances):
+        if inst.get("name") == name:
+            index = i
+            break
+
+    # If machine is not found — cannot update
+    if index is None:
+        return jsonify({"error": f"Machine '{name}' not found"}), 404
+
+    # Merge existing fields with new fields (partial update)
+    merged = {**instances[index], **payload}
+
+    # Validate updated data using Pydantic model
+    try:
+        vm = VMInstance(**merged)
+    except Exception as e:
+        logger.error(f"Invalid VM update for '{name}': {e}")
+        return jsonify({"error": str(e)}), 400
+
+    # Save the updated instance back into the list
+    instances[index] = merged
+    full_data = {"instances": instances}
+
+    # Create backup before writing (safety mechanism)
+    backup_instances_file()
+
+    # Write updated data to disk
+    with INSTANCES_FILE.open("w", encoding="utf-8") as f:
+        json.dump(full_data, f, indent=4)
+
+    logger.info(f"Machine '{name}' updated via API")
+
+    # PUT successful
+    return jsonify({"status": "ok"}), 200
+
+@app.delete("/instances/<string:name>")
+def delete_instance(name):
+    # If there is no JSON file, nothing to delete
+    if not INSTANCES_FILE.exists():
+        return jsonify({"error": "No instances file found"}), 404
+
+    # Load current instances
+    with INSTANCES_FILE.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Normalize structure
+    if isinstance(data, dict) and "instances" in data:
+        instances = data["instances"]
+    elif isinstance(data, list):
+        instances = data
+    else:
+        instances = []
+
+    # Find machine by name
+    index = None
+    for i, inst in enumerate(instances):
+        if inst.get("name") == name:
+            index = i
+            break
+
+    # If machine doesn't exist — cannot delete
+    if index is None:
+        return jsonify({"error": f"Machine '{name}' not found"}), 404
+
+    # Remove the machine from the list
+    deleted_instance = instances.pop(index)
+    full_data = {"instances": instances}
+
+    # Backup before writing
+    backup_instances_file()
+
+    # Write updated list back to JSON file
+    with INSTANCES_FILE.open("w", encoding="utf-8") as f:
+        json.dump(full_data, f, indent=4)
+
+    logger.info(f"Machine '{name}' deleted via API")
+
+    # Successful deletion
+    return jsonify({"deleted": deleted_instance}), 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
