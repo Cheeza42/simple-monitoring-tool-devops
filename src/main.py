@@ -213,33 +213,49 @@ def display_all_instances():
 def edit_existing_machine():
     print("\n✏️ Edit Existing Machine")
     print("------------------------")
-    instances = load_instances()
     name = input("Enter the machine name to edit: ").strip()
     time.sleep(1.2)
 
+    # Fetch all instances from API instead of local file access
+    try:
+        response = requests.get(f"{API_BASE_URL}/instances", timeout=5)
+    except Exception as e:
+        print(f"\n❌ Failed to reach API: {e}")
+        logger.error(f"API request failed while editing '{name}': {e}")
+        return
+
+    # Ensure API returned valid data
+    if response.status_code != 200:
+        print(f"\n❌ Failed to fetch instances from API (status {response.status_code})")
+        logger.error(f"Failed to fetch instances from API, status {response.status_code}")
+        return
+
+    data = response.json()
+    instances = data.get("instances", [])
+
     # Search for machine by name
-    for idx, inst in enumerate(instances):
+    for inst in instances:
         if inst.get("name") == name:
-            # Display current configuration
+            # Show current machine configuration
             print("\nCurrent configuration:")
             time.sleep(0.8)
             print(json.dumps(inst, indent=4))
             print("\nPress Enter to keep existing value.\n")
 
-            # Ask user for new values (optional)
+            # Ask user for updated fields (optional inputs)
             new_ip = input(f"IP address [{inst['ip']}]: ").strip()
             new_os = input(f"Operating system [{inst['os']}]: ").strip()
             new_status = input(f"Status (UP/DOWN) [{inst['status']}]: ").strip().upper()
 
-            # Create updated data (keep original if input is empty)
+            # Merge updated fields with existing values
             updated_data = {
-                "name": name,  # name is not editable
+                "name": name,  # name is fixed and not editable
                 "ip": new_ip if new_ip else inst["ip"],
                 "os": new_os if new_os else inst["os"],
                 "status": new_status if new_status else inst["status"]
             }
 
-            # Validate using Pydantic model
+            # Validate using Pydantic model before sending to server
             try:
                 updated_vm = VMInstance(**updated_data)
             except Exception as e:
@@ -247,72 +263,126 @@ def edit_existing_machine():
                 logger.error(f"Validation failed while editing '{name}': {e}")
                 return
 
-            # Confirm before saving
+            # Confirm changes before sending PUT request
             confirm = input("\nSave changes? (y/n): ").strip().lower()
-            if confirm != 'y':
+            if confirm != "y":
                 print("Changes discarded.\n")
                 logger.info(f"User cancelled editing for machine '{name}'")
                 return
-            
-            # Backup before writing
-            backup_instances_file()
 
-            # Save the updated data back to file
-            instances[idx] = updated_data
-            path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
-            with open(path, 'w') as file:
-                json.dump({"instances": instances}, file, indent=4)
-            
-            print("💾 Saving changes...")
-            time.sleep(1.3)
-            print("✅ Machine updated successfully.\n")
-            time.sleep(0.8)
-            logger.info(f"Machine '{name}' was updated.")
-            return
-
-    # If machine was not found
-    print(f"❌ Machine '{name}' not found.\n")
-    logger.warning(f"Attempted to edit non-existing machine '{name}'")
-
-# Handles interactive deletion of a machine
-def remove_machine():
-    print("\n🗑️ Remove a Machine")
-    print("--------------------")
-    instances = load_instances()
-    name = input("Enter the machine name to remove: ").strip()
-
-    print("🔍 Searching for machine...")
-    time.sleep(1)
-
-    for idx, inst in enumerate(instances):
-        if inst.get("name") == name:
-            print("\nMachine found:")
-            print(json.dumps(inst, indent=4))
-            time.sleep(0.8)
-
-            confirm = input("\nAre you sure you want to delete this machine? (y/n): ").strip().lower()
-            if confirm != 'y':
-                print("❎ Deletion canceled.\n")
-                logger.info(f"User canceled deletion of machine '{name}'")
+            # Send update request to API (PUT)
+            try:
+                put_response = requests.put(
+                    f"{API_BASE_URL}/instances/{name}",
+                    json=updated_data,
+                    timeout=5
+                )
+            except Exception as e:
+                print(f"\n❌ Failed to send update to API: {e}")
+                logger.error(f"API PUT failed for '{name}': {e}")
                 return
 
-            # Remove and save
-            del instances[idx]
-            
-            # Backup before writing
-            backup_instances_file()
+            # Handle API response codes
+            if put_response.status_code == 200:
+                print("💾 Saving changes...")
+                time.sleep(1.3)
+                print("✅ Machine updated successfully via API.\n")
+                time.sleep(0.8)
+                logger.info(f"Machine '{name}' was updated via API.")
+            elif put_response.status_code == 400:
+                print("\n❌ Update rejected by API: validation error.")
+                logger.error(f"API validation error while updating '{name}': {put_response.text}")
+            elif put_response.status_code == 404:
+                print("\n❌ Update failed: machine not found on server.")
+                logger.warning(f"Machine '{name}' not found on server during update.")
+            else:
+                print(f"\n❌ Update failed with status {put_response.status_code}")
+                logger.error(f"API PUT error for '{name}', status {put_response.status_code}: {put_response.text}")
 
-            path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'instances.json')
-            with open(path, 'w') as file:
-                json.dump({"instances": instances}, file, indent=4)
+            return  # End after handling update
 
-            time.sleep(1.3)
-            print("✅ Machine deleted successfully.\n")
-            logger.warning(f"Machine '{name}' was deleted.")
-            return
-
+    # Machine not found locally
     print(f"❌ Machine '{name}' not found.\n")
-    logger.warning(f"Attempted to delete non-existing machine '{name}'")
+    logger.warning(f"Attempted to edit non-existing machine '{name}'")
+    
+# Handles interactive deletion of a machine
+def remove_machine():
+    print("\n🗑️  Remove a Machine")
+    print("--------------------")
+    name = input("Enter the machine name to remove: ").strip()
+
+    if not name:
+        print("❌ Machine name is required.\n")
+        return
+
+    print("🔍 Fetching machines from API...")
+    time.sleep(1)
+
+    # Fetch all instances from API instead of reading JSON file directly
+    try:
+        response = requests.get(f"{API_BASE_URL}/instances", timeout=5)
+    except Exception as e:
+        print(f"\n❌ Failed to reach API: {e}")
+        logger.error(f"API request failed while trying to remove '{name}': {e}")
+        return
+
+    if response.status_code != 200:
+        print(f"\n❌ Failed to fetch instances from API (status {response.status_code})")
+        logger.error(f"Failed to fetch instances from API, status {response.status_code}")
+        return
+
+    data = response.json()
+    instances = data.get("instances", [])
+
+    # Try to find the machine locally for preview before deletion
+    target = None
+    for inst in instances:
+        if inst.get("name") == name:
+            target = inst
+            break
+
+    if not target:
+        print(f"❌ Machine '{name}' not found.\n")
+        logger.warning(f"Attempted to delete non-existing machine '{name}'")
+        return
+
+    # Show machine details before deletion
+    print("\nMachine found:")
+    print(json.dumps(target, indent=4))
+    time.sleep(0.8)
+
+    # Ask for confirmation before calling DELETE
+    confirm = input("\nAre you sure you want to delete this machine? (y/n): ").strip().lower()
+    if confirm != "y":
+        print("❎ Deletion canceled.\n")
+        logger.info(f"User canceled deletion of machine '{name}'")
+        return
+
+    print("🗑️  Sending delete request to API...")
+    time.sleep(0.8)
+
+    # Send DELETE request to the API
+    try:
+        delete_response = requests.delete(
+            f"{API_BASE_URL}/instances/{name}",
+            timeout=5
+        )
+    except Exception as e:
+        print(f"\n❌ Failed to send delete request to API: {e}")
+        logger.error(f"API DELETE failed for '{name}': {e}")
+        return
+
+    # Handle API response
+    if delete_response.status_code == 200:
+        time.sleep(1.3)
+        print("✅ Machine deleted successfully via API.\n")
+        logger.info(f"Machine '{name}' was deleted via API.")
+    elif delete_response.status_code == 404:
+        print("\n❌ Delete failed: machine not found on server.")
+        logger.warning(f"Machine '{name}' not found on server during delete.")
+    else:
+        print(f"\n❌ Delete failed with status {delete_response.status_code}")
+        logger.error(f"API DELETE error for '{name}', status {delete_response.status_code}: {delete_response.text}")
 
 # Main function that runs the monitoring tool
 def main():
@@ -320,9 +390,8 @@ def main():
         print_intro()
         choice = input("Choose an option (from 1-8): ").strip()
 
-        # Option 1: Check if a machine exists
+        # Option 1: Check if a machine exists (via API)
         if choice == '1':
-            instances = load_instances()
             checking = True
 
             while checking:
@@ -333,26 +402,41 @@ def main():
                     time.sleep(1)
                     continue
 
-                # Simulate a loading/checking delay
                 print("🔍 Checking machine status...")
                 time.sleep(1.5)
 
+                # Fetch current instances list from API instead of reading JSON directly
+                try:
+                    response = requests.get(f"{API_BASE_URL}/instances", timeout=5)
+                except Exception as e:
+                    print(f"\n❌ Failed to reach API: {e}")
+                    logger.error(f"API request failed while checking machine '{machine_name}': {e}")
+                    break
+
+                if response.status_code != 200:
+                    print(f"\n❌ Failed to fetch instances from API (status {response.status_code})")
+                    logger.error(f"Failed to fetch instances from API while checking '{machine_name}', status {response.status_code}")
+                    break
+
+                data = response.json()
+                instances = data.get("instances", [])
+
+                # Use helper function to check if machine exists in the list from API
                 if check_machine_exists(instances, machine_name):
                     print(f"✅ Machine '{machine_name}' exists.\n")
                     logger.info(f"Machine '{machine_name}' exists")
-
                 else:
                     print(f"❌ Machine '{machine_name}' does not exist.\n")
                     logger.warning(f"Machine '{machine_name}' does not exist")
+
                 time.sleep(1)
 
-                # Ask user if they want to check another machine
                 again = input("Would you like to check another machine? (y/n): ").strip().lower()
                 if again != 'y':
                     print("🔄 Returning to main menu.\n")
                     time.sleep(1.5)
                     checking = False
-
+                    
         # Option 2: Exit the tool
         elif choice == '2':
             print("👋 Exiting. Goodbye!")
