@@ -11,4 +11,6 @@ COPY configs ./configs
 
 RUN mkdir -p logs
 
-CMD ["python", "src/main.py"]
+EXPOSE 5000
+
+CMD ["python", "src/api_server.py"]
