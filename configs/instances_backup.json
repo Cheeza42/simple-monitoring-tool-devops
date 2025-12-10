@@ -19,7 +19,6 @@
             "memory_percent": 72,
             "response_time_ms": 100,
             "health": "OK"
-
         },
         {
             "name": "vm-003",
@@ -84,12 +83,19 @@
         {
             "name": "vm-010",
             "ip": "35.166.141.61",
-            "os": "IOS 26.1",
+            "os": "Debian 15",
             "status": "UP",
             "cpu_percent": 66,
             "memory_percent": 48,
             "response_time_ms": 115,
             "health": "OK"
+        },
+        {
+            "name": "vm-011",
+            "ip": "192.56.4.78",
+            "os": "Ubuntu 4.22",
+            "status": "DOWN",
+            "check": "ping"
         }
     ]
 }
