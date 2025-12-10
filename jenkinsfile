@@ -1,0 +1,52 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:debug
+      tty: true
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+  volumes:
+    - name: docker-config
+      emptyDir: {}
+"""
+            defaultContainer 'kaniko'
+        }
+    }
+
+    environment {
+        DOCKERHUB_USERNAME = credentials('cheeza42-username')
+        DOCKERHUB_PASSWORD = credentials('cheeza42-password')
+        IMAGE_NAME = 'docker.io/cheeza42/simple-monitoring-api'
+        DOCKERFILE_PATH = 'Dockerfile'
+        BUILD_CONTEXT = '.'
+        IMAGE_TAG = "build-${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build and Push with Kaniko') {
+            steps {
+                sh """
+                echo "{\\"auths\\":{\\"https://index.docker.io/v1/\\":{\\"auth\\":\\"$(echo -n '${DOCKERHUB_USERNAME}:${DOCKERHUB_PASSWORD}' | base64)\\"}}}" > /kaniko/.docker/config.json
+
+                /kaniko/executor \
+                  --dockerfile=${DOCKERFILE_PATH} \
+                  --context=${WORKSPACE}/${BUILD_CONTEXT} \
+                  --destination=${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+    }
+}
