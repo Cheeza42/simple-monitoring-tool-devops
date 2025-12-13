@@ -37,8 +37,8 @@ spec:
             steps {
                 sh '''
                 mkdir -p /kaniko/.docker
-                AUTH="$(printf "%s:%s" "$DOCKERHUB_USERNAME" "$DOCKERHUB_PASSWORD" | base64 | tr -d "\\n")"
-                printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "$AUTH" > /kaniko/.docker/config.json
+                AUTH="$(printf "%s" "{$DOCKERHUB_USERNAME}:${$DOCKERHUB_PASSWORD}" | base64 | tr -d "\\n")"
+                printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH" > /kaniko/.docker/config.json
 
                 /kaniko/executor \
                   --dockerfile="$WORKSPACE/$DOCKERFILE_PATH" \
