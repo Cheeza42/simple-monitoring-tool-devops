@@ -8,10 +8,33 @@ spec:
   containers:
     - name: kaniko
       image: gcr.io/kaniko-project/executor:debug
+      command:
+        - /busybox/sh
+      args:
+        - -c
+        - sleep 3650d
       tty: true
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+    - name: python
+      image: python:3.11-slim
+      command:
+        - sh
+      args:
+        - -c
+        - sleep 3650d
+      tty: true
+  volumes:
+    - name: docker-config
+      emptyDir: {}
 """
-            defaultContainer 'kaniko'
+            defaultContainer 'python'
         }
+    }
+
+    options {
+        skipDefaultCheckout(true)
     }
 
     environment {
@@ -30,23 +53,59 @@ spec:
             }
         }
 
+        stage('Compute Tag') {
+            steps {
+                script {
+                    def sha = sh(returnStdout: true, script: 'git rev-parse --short HEAD').trim()
+                    env.IMAGE_TAG = "build-${env.BUILD_NUMBER}-${sha}"
+                }
+            }
+        }
+
+        stage('Parallel Checks') {
+            parallel {
+                stage('Repo Sanity') {
+                    steps {
+                        sh '''
+                          set -e
+                          test -f "${DOCKERFILE_PATH}"
+                          test -d "src"
+                          test -f "requirements.txt"
+                        '''
+                    }
+                }
+
+                stage('Python Compile') {
+                    steps {
+                        sh '''
+                          set -e
+                          python -V
+                          python -m compileall -q src
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('Build & Push (Kaniko)') {
             steps {
-                sh """
-                  set -e
-                  mkdir -p /kaniko/.docker
-                  AUTH=\$(printf "%s" "${DOCKERHUB_USERNAME}:${DOCKERHUB_PASSWORD}" | base64 | tr -d '\\n')
-                  printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "\$AUTH" > /kaniko/.docker/config.json
-                  DF_REL="\${DOCKERFILE_PATH#\${BUILD_CONTEXT}/}"
-                  [ "\$DF_REL" = "\${DOCKERFILE_PATH}" ] && DF_REL="\${DOCKERFILE_PATH}"
-                  test -f "\${BUILD_CONTEXT}/\${DF_REL}" || { echo "Dockerfile not found at \${BUILD_CONTEXT}/\${DF_REL}"; exit 1; }
-                  /kaniko/executor \
-                    --verbosity=debug \
-                    --context="\${BUILD_CONTEXT}" \
-                    --dockerfile="\${DOCKERFILE_PATH}" \
-                    --destination="\${IMAGE_NAME}:\${IMAGE_TAG}" \
-                    --destination="\${IMAGE_NAME}:latest"
-                """
+                container('kaniko') {
+                    sh '''
+                      set -e
+                      mkdir -p /kaniko/.docker
+                      AUTH=$(printf "%s" "${DOCKERHUB_USERNAME}:${DOCKERHUB_PASSWORD}" | base64 | tr -d '\\n')
+                      printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}\n' "$AUTH" > /kaniko/.docker/config.json
+                      DF_REL="${DOCKERFILE_PATH#${BUILD_CONTEXT}/}"
+                      [ "$DF_REL" = "${DOCKERFILE_PATH}" ] && DF_REL="${DOCKERFILE_PATH}"
+                      test -f "${BUILD_CONTEXT}/${DF_REL}" || { echo "Dockerfile not found at ${BUILD_CONTEXT}/${DF_REL}"; exit 1; }
+                      /kaniko/executor \
+                        --verbosity=debug \
+                        --context="${BUILD_CONTEXT}" \
+                        --dockerfile="${DOCKERFILE_PATH}" \
+                        --destination="${IMAGE_NAME}:${IMAGE_TAG}" \
+                        --destination="${IMAGE_NAME}:latest"
+                    '''
+                }
             }
         }
     }
