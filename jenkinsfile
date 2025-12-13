@@ -39,9 +39,9 @@ spec:
                 [ "\$DF_REL" = "\${DOCKERFILE_PATH}" ] && DF_REL="\${DOCKERFILE_PATH}"
                 test -f "\${BUILD_CONTEXT}/\${DF_REL}" || { echo "Dockerfile not found at \${BUILD_CONTEXT}/\${DF_REL}"; exit 1; }
                 /kaniko/executor \
-                  --context=${WORKSPACE} \
-                  --dockerfile=${WORKSPACE}/dockerfile \
-                  --destination=${IMAGE_NAME}:${IMAGE_TAG}
+                  --context="\${WORKSPACE}" \
+                  --dockerfile="\${DOCKERFIEL_PATH}" \
+                  --destination="\${IMAGE_NAME}:${IMAGE_TAG}" 
                 '''
             }
         }
