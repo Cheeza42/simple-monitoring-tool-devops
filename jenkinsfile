@@ -21,10 +21,9 @@ spec:
     environment {
         DOCKERHUB_USERNAME = credentials('cheeza42-username')
         DOCKERHUB_PASSWORD = credentials('cheeza42-password')
-        IMAGE_REPO = 'docker.io/cheeza42/simple-monitoring-api'
+        IMAGE_NAME = 'docker.io/cheeza42/simple-monitoring-api'
         DOCKERFILE_PATH = 'dockerfile'
         BUILD_CONTEXT = '.'
-        IMAGE_TAG = "build-${BUILD_NUMBER}"
     }
 
     stages {
