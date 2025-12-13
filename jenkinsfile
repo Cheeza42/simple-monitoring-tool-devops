@@ -33,7 +33,9 @@ spec:
         stage('Build & Push (Kaniko)') {
             steps {
                 sh '''
+                set -e
                 mkdir -p /kaniko/.docker
+                AUTH=\$(printf "%s" "${DOCKERHUB_USERNAME}:${DOCKERHUB_PASSWORD}" | base64 | tr -d '\\n')
                 echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$(echo -n ${DOCKERHUB_USERNAME}:${DOCKERHUB_PASSWORD} | base64 | tr -d '\\n')\"}}}" > /kaniko/.docker/config.json
                 DF_REL="\${DOCKERFILE_PATH#\${BUILD_CONTEXT}/}"
                 [ "\$DF_REL" = "\${DOCKERFILE_PATH}" ] && DF_REL="\${DOCKERFILE_PATH}"
