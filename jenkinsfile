@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            yaml '''
+            yaml """
 apiVersion: v1
 kind: Pod
 spec:
@@ -13,7 +13,13 @@ spec:
         - -c
         - sleep 3650d
       tty: true
-'''
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+  volumes:
+    - name: docker-config
+      emptyDir: {}
+"""
             defaultContainer 'kaniko'
         }
     }
@@ -21,31 +27,26 @@ spec:
     environment {
         DOCKERHUB_USERNAME = credentials('cheeza42-username')
         DOCKERHUB_PASSWORD = credentials('cheeza42-password')
-        IMAGE_REPO = 'docker.io/cheeza42/simple-monitoring-api'
+        IMAGE_NAME = 'docker.io/cheeza42/simple-monitoring-api'
         DOCKERFILE_PATH = 'Dockerfile'
-        BUILD_CONTEXT = '.'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('Build & Push (Kaniko)') {
             steps {
-                sh '''
-                mkdir -p /kaniko/.docker
-                AUTH="$(printf "%s:%s" "$DOCKERHUB_USERNAME" "$DOCKERHUB_PASSWORD" | base64 | tr -d "\\n")"
-                printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "$AUTH" > /kaniko/.docker/config.json
+                container('kaniko') {
+                    sh '''
+mkdir -p /kaniko/.docker
+AUTH=$(printf '%s:%s' "$DOCKERHUB_USERNAME" "$DOCKERHUB_PASSWORD" | base64 | tr -d '\n')
+printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "$AUTH" > /kaniko/.docker/config.json
 
-                /kaniko/executor \
-                  --dockerfile="$WORKSPACE/$DOCKERFILE_PATH" \
-                  --context="$WORKSPACE/$BUILD_CONTEXT" \
-                  --destination="$IMAGE_REPO:$IMAGE_TAG"
-                '''
+/kaniko/executor \
+  --dockerfile="$DOCKERFILE_PATH" \
+  --context="$WORKSPACE" \
+  --destination="$IMAGE_NAME:$IMAGE_TAG"
+'''
+                }
             }
         }
     }
