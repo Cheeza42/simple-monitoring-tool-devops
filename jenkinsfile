@@ -18,7 +18,7 @@ spec:
         DOCKERHUB_USERNAME = credentials('cheeza42-username')
         DOCKERHUB_PASSWORD = credentials('cheeza42-password')
         IMAGE_NAME = 'docker.io/cheeza42/simple-monitoring-api'
-        DOCKERFILE_PATH = 'dockerfile'
+        DOCKERFILE_PATH = 'Dockerfile'
         BUILD_CONTEXT = '.'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
     }
